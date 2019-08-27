@@ -4,7 +4,10 @@ const morgan = require("morgan");
 const graphqlHttp = require("express-graphql");
 const { buildSchema } = require('graphql');
 const mongoose = require('mongoose');
+const bcrypt = require('bcryptjs');
+// Model imports
 const Event = require("./models/events");
+const User = require("./models/user");
 
 // nodemon consume the nodemon.json file for extra data
 mongoose.Promise = global.Promise;
@@ -29,8 +32,20 @@ app.use("/graphql",graphqlHttp({
             date : String!
         }
 
+        type User{
+            _id: ID!
+            email: String!
+            password: String
+        }
+
+        input UserInput {
+            email: String!
+            password: String!
+        }
+
         type RootQuery{
-            events: [Event!]! 
+            events: [Event!]!
+            users: [User!]! 
         }
 
         input EventInput{
@@ -42,6 +57,7 @@ app.use("/graphql",graphqlHttp({
 
         type RootMutation{
             createEvent(eventInput: EventInput): Event!
+            createUser(userInput: UserInput): User!
         }
 
         schema {
@@ -51,6 +67,7 @@ app.use("/graphql",graphqlHttp({
     `), // created with graphql package --- this is with the specification of the graphql
     rootValue: { // must matches with the schema
         events:()=>{
+            
             return Event.find() // must return the promise
             .then((events)=>{
                 console.log(events);
@@ -63,7 +80,6 @@ app.use("/graphql",graphqlHttp({
             .catch(err=>{
                 console.log(err);
             });
-            return events;
         },
         createEvent: (args)=>{
             const event = new Event({
@@ -78,14 +94,61 @@ app.use("/graphql",graphqlHttp({
                             console.log(result);
                             // must return the actual doc
                             console.log(result)
-                            return {...result._doc}
+                            return {...result._doc, _id:event._doc._id.toString() } 
+                            // automatically replace the _id in _doc by the second parameter in javascript extraction sytax
                         })
                         .catch(err=>{
                             console.log(err);
                             throw err;
                         });
-        } 
-    },// point at js object which have all the resolver function in it match by name
+        },
+        createUser:(args)=>{
+
+            // look for user with existing in the data base and return response accordling
+
+            return User.findOne({email:args.userInput.email})
+            .then(user=>{
+                if(user){
+                    throw new Error("User Already Exist");
+                }
+                return bcrypt.hash(args.userInput.password, 12);
+            })
+            .then(hashPassword=>{
+                    const user = new User({
+                        email:args.userInput.email,
+                        password:hashPassword
+                    });
+                    return user.save(); // this return promise which will be handles in the upper promise resolver
+                    
+                })
+            .then(result=>{
+                    console.log(result);
+                    return {...result._doc,password:null };
+                })
+            .catch(err=>{
+                    console.log(err);
+                    throw err; // this will pass the error to the high level promise and resolving of promise works fine
+            }) // 12 rounds of salting knows as 12 round of salts
+      
+                
+
+        },
+        users:()=>{
+
+            return User.find()
+            .then(result => {
+                return result.map(user=>{
+                    return {...user._doc,password:null};
+                })
+            })
+            .catch(err=>{
+                console.log(err);
+            });
+            
+        }
+         
+    },
+    // point at js object which have all the resolver function in it match by name
     graphiql:true
 
 }));
@@ -98,11 +161,29 @@ app.use("/graphql",graphqlHttp({
 //         message:"Testing"
 //     })
 // });
-mongoose.connect("mongodb+srv://admin:"+process.env.MONGO_PASSWORD+"@node-rest-api-tispt.mongodb.net/graphQL?retryWrites=true&w=majority",{useNewUrlParser:true})
-.then(()=>{
-    console.log("successfully Connected to database");
-    app.listen(3000);
-})
-.catch(err=>console.log(err));
-//start server only if the database is connected
+
+if(require("os").userInfo().username==="rupanshu.verma"){
+    //mongodb://127.0.0.1:27017/
+    mongoose.connect("mongodb://127.0.0.1:27017/graphQL",{useNewUrlParser:true})
+    .then(()=>{
+        console.log("successfully Connected to database");
+        app.listen(3000);
+    })
+    .catch(err=>{
+        console.log(err);
+    });
+}else{
+
+    mongoose.connect("mongodb+srv://admin:"+process.env.MONGO_PASSWORD+"@node-rest-api-tispt.mongodb.net/graphQL?retryWrites=true&w=majority",{useNewUrlParser:true})
+    .then(()=>{
+        console.log("successfully Connected to database");
+        app.listen(3000);
+    })
+    .catch(err=>{
+        console.log(err)
+        console.log()
+    });
+    //start server only if the database is connected
+}
+
 
