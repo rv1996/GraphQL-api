@@ -1,32 +1,22 @@
 const mongoose = require("mongoose");
 
-// const Schema = mongoose.Schema;
-
-// const eventSchema = new Schema();
-// or 
-
-const eventSchema = mongoose.Schema({
-    title: {
+var userSchema = mongoose.Schema({
+    email:{
         type:String,
-        require:true
+        require:true,
     },
-    description: {
+    password:{
         type:String,
-        require:true
+        require:false
     },
-    price: {
-        type:Number,
-        require:true
-    },
-    date: {
-        type:Date,
-        require:true
-    },
-    creator:{
-        type:mongoose.Schema.Types.ObjectId,
-        ref:"Users"
-    }
-});
+    createdEvents:[
+        {
+            type:mongoose.Schema.Types.ObjectId,
+            ref:'Events'
+        }
+    ]
+
+})
 
 
-module.exports = mongoose.model("Events",eventSchema);
+module.exports = mongoose.model("Users",userSchema);
