@@ -30,6 +30,7 @@ app.use("/graphql",graphqlHttp({
             description: String!
             price: Float!
             date : String!
+            creator: String!
         }
 
         type User{
@@ -53,6 +54,7 @@ app.use("/graphql",graphqlHttp({
             description: String!
             price: Float!
             date: String!
+            creator: String
         }
 
         type RootMutation{
@@ -87,20 +89,30 @@ app.use("/graphql",graphqlHttp({
                 description: args.eventInput.description,
                 price: +args.eventInput.price,
                 date: new Date(args.eventInput.date),
+                creator: args.eventInput.creator
             });
 
+            let createdEvent;
             return event.save() // must return the promise
-                        .then(result=>{
-                            console.log(result);
-                            // must return the actual doc
-                            console.log(result)
-                            return {...result._doc, _id:event._doc._id.toString() } 
-                            // automatically replace the _id in _doc by the second parameter in javascript extraction sytax
-                        })
-                        .catch(err=>{
-                            console.log(err);
-                            throw err;
-                        });
+                .then(result=>{
+                    createdEvent = {...result._doc, _id:event._doc._id.toString() };
+                    return User.findById(result.creator); //will return user model reference
+                })
+                .then(user=>{
+                    if(!user){
+                        throw new Error("User Does not exist");
+                    }
+                    user.createdEvents.push(event);
+                    return user.save(); // to updated the created events lists
+                })
+                .then(result=>{
+                    console.log(createdEvent);
+                    return createdEvent 
+                })
+                .catch(err=>{
+                    console.log(err);
+                    throw err;
+                });
         },
         createUser:(args)=>{
 
@@ -119,7 +131,6 @@ app.use("/graphql",graphqlHttp({
                         password:hashPassword
                     });
                     return user.save(); // this return promise which will be handles in the upper promise resolver
-                    
                 })
             .then(result=>{
                     console.log(result);
